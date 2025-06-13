@@ -1,0 +1,4 @@
+socksio
+httpx
+pycryptodome
+msgpack
