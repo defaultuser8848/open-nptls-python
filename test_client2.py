@@ -25,7 +25,6 @@ async def main():
                 await client.send_message(MessageType.MESSAGE,text.encode())
             except Exception as e:
                 raise
-                print(f"[输入错误] {e}")
     print("正在连接到服务器...")
     asyncio.create_task(client.run())
     await asyncio.wait_for(client.connected_event.wait(),10)
