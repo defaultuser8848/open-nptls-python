@@ -1,4 +1,5 @@
-socksio
+python-socketio
+aiohttp
 httpx
 pycryptodome
 msgpack

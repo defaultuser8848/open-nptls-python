@@ -187,7 +187,6 @@ class npTLSClient:
     async def _handle_message(self, data):
         try:
             msg_data = msgpack.unpackb(base64.b85decode(data["text"]))
-            print(msg_data)
             if msg_data.get("sid") != self.session_id:
                 return
             if "seq" not in msg_data or "type" not in msg_data or "nonce" not in msg_data or "data" not in msg_data or "tag" not in msg_data:
