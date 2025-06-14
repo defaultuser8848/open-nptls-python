@@ -1,6 +1,6 @@
 # open-npTLS-python
 
-一个基于 Python 的 npTLS（Notepad Transport Layer Security）实现。
+一个基于 Python 的 npTLS（NotePaper Transport Layer Security）实现。
 
 ## 项目简介
 本项目实现了 npTLS 协议，旨在为 Notepad 等轻量级应用提供安全的传输层加密。项目采用 Python 编写，支持基本的密钥交换、加密通信等功能，适合学习、研究和二次开发。
