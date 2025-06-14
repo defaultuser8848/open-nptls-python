@@ -43,4 +43,4 @@ python test_client2.py
 欢迎提交 issue 和 PR！如有建议或 bug，欢迎反馈。
 
 ## 许可证
-MIT License
+GPL License
