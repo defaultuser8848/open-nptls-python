@@ -51,19 +51,19 @@ class npTLSServer():
             seq = conn_info.send_seq
             conn_info.send_seq += 1
         nonce, encrypted, tag = conn_info.ecdh.encrypt(data)
-        msg: str = base64.b85encode(msgpack.packb({
+        msg: str = base64.a85encode(msgpack.packb({
             "type": type_.value,
             "nonce": nonce,
             "data": encrypted,
             "tag": tag,
             "sid": conn_info.session_id,
             "seq": seq,
-        })).decode()
+        },use_bin_type=True)).decode()
         await self.cli.broadcast(self.message_page, msg)
     async def _connect_handler(self, data: Dict[str, Any]) -> None:
         try:
             try:
-                msg_data = msgpack.unpackb(base64.b85decode(data["text"]))
+                msg_data = msgpack.unpackb(base64.a85decode(data["text"]))
             except (binascii.Error, msgpack.exceptions.UnpackException, KeyError, TypeError, ValueError):
                 return
             if "sid" not in msg_data or "pkey" not in msg_data:
@@ -91,7 +91,7 @@ class npTLSServer():
     async def _message_handler(self, data: Dict[str, Any]) -> None:
         try:
             try:
-                msg_data = msgpack.unpackb(base64.b85decode(data["text"]))
+                msg_data = msgpack.unpackb(base64.a85decode(data["text"]))
             except (binascii.Error, msgpack.exceptions.UnpackException, KeyError, TypeError, ValueError):
                 return
             if "sid" not in msg_data or "seq" not in msg_data:
@@ -186,7 +186,7 @@ class npTLSClient:
 
     async def _handle_message(self, data):
         try:
-            msg_data = msgpack.unpackb(base64.b85decode(data["text"]))
+            msg_data = msgpack.unpackb(base64.a85decode(data["text"]))
             if msg_data.get("sid") != self.session_id:
                 return
             if "seq" not in msg_data or "type" not in msg_data or "nonce" not in msg_data or "data" not in msg_data or "tag" not in msg_data:
@@ -236,14 +236,14 @@ class npTLSClient:
             seq = self.send_seq
             self.send_seq += 1
         nonce, encrypted, tag = self.ecdh.encrypt(data)
-        msg = base64.b85encode(msgpack.packb({
+        msg = base64.a85encode(msgpack.packb({
             "type": type_.value,
             "nonce": nonce,
             "data": encrypted,
             "tag": tag,
             "sid": self.session_id,
             "seq": seq
-        })).decode()
+        },use_bin_type=True)).decode()
         await self.cli.broadcast(self.message_page, msg)
 
     async def disconnect(self):
@@ -273,7 +273,7 @@ class npTLSClient:
             "pkey": self.pub_key.export_key(format="PEM"),
             "seq": 0
         }
-        connect_msg = base64.b85encode(msgpack.packb(connect_info)).decode()
+        connect_msg = base64.a85encode(msgpack.packb(connect_info,use_bin_type=True)).decode()
         # 发送 Connect 指令
         await self.cli.broadcast(self.connect_page, connect_msg)
         await self.cli.listen(self.message_page, self._handle_message)
