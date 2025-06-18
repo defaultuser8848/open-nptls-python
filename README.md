@@ -8,7 +8,6 @@
 ## 主要特性
 - 支持 ECDH 密钥交换
 - 使用 PyCryptodome 进行加密操作
-- 支持 SOCKS 代理（socksio）
 - 高效的消息打包（msgpack）
 - 基于 httpx 的网络通信
 

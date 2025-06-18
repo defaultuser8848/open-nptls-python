@@ -1,7 +1,6 @@
 import asyncio
 import sys
-from utils.notepaper import Notepaper
-from nptls import npTLSClient,MessageType
+from nptls import npTLSClient,MessageType,Notepaper
 
 async def main():
     cli = Notepaper()

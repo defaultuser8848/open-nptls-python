@@ -1,0 +1,32 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "open-nptls"
+version = "0.1.0"
+authors = [
+  { name="defaultuser8848", email="defaultuser6.public@gmail.com" },
+]
+description = "一个基于 Python 的 npTLS（NotePaper Transport Layer Security）实现。"
+readme = "README.md"
+requires-python = ">=3.8"
+license = { file="LICENSE" }
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)",
+    "Operating System :: OS Independent",
+    "Topic :: Security :: Cryptography",
+    "Topic :: Communications",
+]
+dependencies = [
+    "python-socketio",
+    "aiohttp",
+    "httpx",
+    "pycryptodome",
+    "msgpack",
+]
+
+[project.urls]
+Homepage = "https://github.com/defaultuser8848/open-nptls-python"  # 替换成你的项目地址
+"Bug Tracker" = "https://github.com/defaultuser8848/open-nptls-python/issues" # 替换成你的项目地址

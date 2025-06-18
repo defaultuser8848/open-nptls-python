@@ -1,5 +1,4 @@
-from nptls import npTLSServer,MessageType
-from utils.notepaper import Notepaper
+from nptls import npTLSServer,MessageType,Notepaper
 import asyncio
 async def main():
     np=Notepaper()
