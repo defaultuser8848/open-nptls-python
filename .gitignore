@@ -1,1 +1,16 @@
-**/__pycache__
+# Python
+__pycache__/
+*.py[cod]
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+.eggs/
+*.pyo
+*.pyd
+*.pdb
+.vscode
+.mypy_cache/
+.dmypy.json
+

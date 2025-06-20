@@ -10,8 +10,8 @@ import binascii
 
 import msgpack
 
-from utils.ecdh import ECDH, ECC,generate_key_pair
-from utils.notepaper import Notepaper
+from .utils.ecdh import ECDH, ECC,generate_key_pair
+from .utils.notepaper import Notepaper
 
 @dataclasses.dataclass
 class ConnectInfo:
