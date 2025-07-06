@@ -26,8 +26,8 @@ async def main():
                 raise
     print("正在连接到服务器...")
     asyncio.create_task(client.run())
-    await asyncio.wait_for(client.connected_event.wait(),10)
-    print("可以输入消息，回车发送。Ctrl+C 退出。")
+    await asyncio.wait_for(client.conn_event.wait(),10)
+    print("可以输入消息，回车发送。输入exit退出。")
     await user_input_loop()
 if __name__ == "__main__":
     asyncio.run(main())
