@@ -33,7 +33,7 @@ pip install git+https://github.com/defaultuser8848/open-nptls-python.git
 ```
 
 ```py
-import nplts
+import nptls
 ```
 
 ## 快速开始
