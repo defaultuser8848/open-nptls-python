@@ -29,8 +29,7 @@ examples/
 我们采用pip管理项目依赖。
 
 ```bash
-git clone https://github.com/defaultuser8848/open-nptls-python.git
-pip install .
+pip install git+https://github.com/defaultuser8848/open-nptls-python.git
 ```
 
 ```py
