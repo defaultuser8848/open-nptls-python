@@ -8,34 +8,41 @@
 ## 主要特性
 - 支持 ECDH 密钥交换
 - 使用 PyCryptodome 进行加密操作
-- 高效的消息打包（msgpack）
+- 自定义二进制消息打包
 - 基于 httpx 的网络通信
 
 ## 目录结构
 ```
-open-npTLS-python/
-├── config.py           # 配置文件
-├── main2.py            # 主程序入口
+src/
 ├── nptls.py            # npTLS 协议核心实现
-├── requirements.txt    # 依赖包列表
-├── test_client2.py     # 测试客户端
+├── __init__.py         # 标记为python包
 └── utils/              # 工具模块
     ├── ecdh.py         # ECDH 密钥交换实现
-    └── notepaper.py    # 其他工具函数
+    ├── pack.py         # 消息打包和解包
+    └── notepaper.py    # Notepaper传输层接口
+examples/
+├── client_example.py   # 客户端实现
+└── server_example.py   # 最简回响服务
 ```
 
 ## 安装依赖
-建议使用 Python 3.8 及以上版本。
+我们采用pip管理项目依赖。
 
 ```bash
-pip install -r requirements.txt
+git clone https://github.com/defaultuser8848/open-nptls-python.git
+pip install .
+```
+
+```py
+import nplts
 ```
 
 ## 快速开始
 以测试客户端为例：
 
 ```bash
-python test_client2.py
+cd examples
+python client_example.py
 ```
 
 ## 贡献指南
