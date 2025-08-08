@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "open-nptls"
-version = "0.1.0"
+version = "0.1.1"
 authors = [
   { name="defaultuser8848", email="defaultuser6.public@gmail.com" },
 ]

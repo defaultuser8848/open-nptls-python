@@ -41,7 +41,14 @@ class npTLSServer:
 
     def add_handler(self, handler: Callable[[ConnectInfo, bytes], Coroutine]) -> None:
         self.callbacks.append(handler)
-
+    def is_connected(self, conn:ConnectInfo) -> bool:
+        if conn.session_id not in self.conn_pool:
+            return False
+        return self.conn_pool[conn.session_id].connected_confirmed
+    def disconnect(self, conn: ConnectInfo) -> None:
+        if conn.session_id in self.conn_pool:
+            asyncio.create_task(self.send_message(MessageType.DISCONNECT, b"Disconnect", conn))
+            del self.conn_pool[conn.session_id]
     async def send_message(self, type_: MessageType, data: bytes, conn: ConnectInfo) -> None:
         seq = conn.send_seq
         nonce, encrypted, tag = conn.ecdh.encrypt(data)
