@@ -3,7 +3,7 @@ import sys
 from nptls import npTLSClient,MessageType,Notepaper
 
 async def main():
-    cli = Notepaper()
+    cli = Notepaper("http://127.0.0.1:5000")
     client = npTLSClient(cli,"nptls-index2")
 
     async def handle_message(data: bytes):

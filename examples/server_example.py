@@ -1,7 +1,7 @@
 from nptls import npTLSServer,MessageType,Notepaper
 import asyncio
 async def main():
-    np=Notepaper()
+    np=Notepaper("http://127.0.0.1:5000")
 
     nptls = npTLSServer(np, "nptls-index2")
     async def handler(session,data):
