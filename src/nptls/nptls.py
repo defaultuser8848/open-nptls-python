@@ -6,6 +6,7 @@ import time
 from typing import Dict, Callable, Any, Coroutine
 import asyncio
 import binascii
+import hashlib
 
 from .utils.ecdh import ECDH, ECC, generate_key_pair
 from .utils.notepaper import Notepaper
@@ -18,7 +19,7 @@ class ConnectInfo:
     ecdh: ECDH
     last_active: float
     send_seq: int = 0
-    peer_recv_seq: int = 0
+    peer_recv_seq: int = 0  # 期望接收的下一个序列号
     connected_confirmed: bool = False
 
 class MessageType(enum.Enum):
@@ -28,28 +29,36 @@ class MessageType(enum.Enum):
     PING = 3
     PONG = 4
 
+MAX_SEQ = (1 << 32) - 1  # 32位序列号最大值
+
 class npTLSServer:
-    def __init__(self, notepaper: Notepaper, index_page: str, name: str = "npTLS", heartbeat_interval: int = 5):
+    def __init__(self, notepaper: Notepaper, index_page: str, name: str = "npTLS", heartbeat_interval: int = 30):
         self.name = name
         self.cli = notepaper
         self.priv_key, self.pub_key = generate_key_pair()
         self.conn_pool: Dict[str, ConnectInfo] = {}
         self.index_page = index_page
-        self.msg_page = secrets.token_urlsafe(16)
+        self.msg_page = hashlib.sha256(f"nptls-msg:{self.name}-{self.index_page}".encode()).hexdigest()[:16]
         self.callbacks = []
         self.heartbeat_int = heartbeat_interval
 
     def add_handler(self, handler: Callable[[ConnectInfo, bytes], Coroutine]) -> None:
         self.callbacks.append(handler)
-    def is_connected(self, conn:ConnectInfo) -> bool:
+        
+    def is_connected(self, conn: ConnectInfo) -> bool:
         if conn.session_id not in self.conn_pool:
             return False
         return self.conn_pool[conn.session_id].connected_confirmed
+        
     def disconnect(self, conn: ConnectInfo) -> None:
         if conn.session_id in self.conn_pool:
             asyncio.create_task(self.send_message(MessageType.DISCONNECT, b"Disconnect", conn))
             del self.conn_pool[conn.session_id]
+            
     async def send_message(self, type_: MessageType, data: bytes, conn: ConnectInfo) -> None:
+        if not self.is_connected(conn) and type_ != MessageType.CONNECT:
+            raise RuntimeError("Not connected")
+            
         seq = conn.send_seq
         nonce, encrypted, tag = conn.ecdh.encrypt(data)
         msg = pack_message(
@@ -61,22 +70,29 @@ class npTLSServer:
             seq=seq
         )
         await self.cli.broadcast(self.msg_page, msg)
-        conn.send_seq += 1
+        conn.send_seq = (conn.send_seq + 1) & MAX_SEQ  # 处理序列号回绕
 
-    async def _handle_connect(self, sid, pkey) -> None:
+    async def _handle_connect_request(self, sid, pkey_data: bytes) -> None:
+        """处理初始的CONNECT请求（未加密）"""
         if sid in self.conn_pool:
             return
             
-        peer_key = ECC.import_key(pkey)
-        ecdh = ECDH(self.priv_key, peer_key)
-        self.conn_pool[sid] = ConnectInfo(
-            session_id=sid,
-            public_key=peer_key,
-            ecdh=ecdh,
-            last_active=time.time()
-        )
-        await self.send_message(MessageType.CONNECT, b"Connected", self.conn_pool[sid])
-        self.conn_pool[sid].connected_confirmed = True
+        try:
+            peer_key = ECC.import_key(pkey_data.decode())
+            ecdh = ECDH(self.priv_key, peer_key)
+            self.conn_pool[sid] = ConnectInfo(
+                session_id=sid,
+                public_key=peer_key,
+                ecdh=ecdh,
+                last_active=time.time(),
+                send_seq=0,
+                peer_recv_seq=1 
+            )
+            await self.send_message(MessageType.CONNECT, b"Connected", self.conn_pool[sid])
+            self.conn_pool[sid].connected_confirmed = True
+        except (ValueError, binascii.Error):
+            # 无效的公钥格式
+            pass
 
     async def _handle_msg(self, data: Dict[str, Any]) -> None:
         try:
@@ -85,44 +101,51 @@ class npTLSServer:
             except (binascii.Error, ValueError, KeyError, TypeError):
                 return
                 
-            if sid not in self.conn_pool:
-                if msg_type == MessageType.CONNECT.value:
-                    await self._handle_connect(sid=sid, pkey=encrypted)
+            # 处理新连接的初始CONNECT请求（未加密）
+            if sid not in self.conn_pool and msg_type == MessageType.CONNECT.value:
+                # 这是初始连接请求，数据是未加密的公钥
+                await self._handle_connect_request(sid, encrypted)
                 return
                 
+            # 已建立的连接，进行通用序列号验证
+            if sid not in self.conn_pool:
+                return
+                    
             conn = self.conn_pool[sid]
             
-            if msg_type == MessageType.CONNECT.value:
-                if seq != 0:
-                    return
-                conn.connected_confirmed = True
-                conn.last_active = time.time()
+            # 验证序列号是否为期望的下一个序列号
+            if seq != conn.peer_recv_seq:
+                # print(f"{sid}: expected {conn.peer_recv_seq}, got {seq}")
                 return
                 
-            if seq != conn.peer_recv_seq + 1:
-                return
-                
+            # 序列号验证通过，递增期望接收的序列号
+            conn.peer_recv_seq = (conn.peer_recv_seq + 1) & MAX_SEQ
+            
+            # 解密消息
             decrypted = conn.ecdh.decrypt(nonce, encrypted, tag)
-            conn.peer_recv_seq = seq
             conn.last_active = time.time()
             
-            if msg_type == MessageType.DISCONNECT.value:
+            # 处理各种消息类型
+            if msg_type == MessageType.CONNECT.value:
+                # 已加密的连接确认消息
+                if decrypted == b"Connected":
+                    conn.connected_confirmed = True
+            elif msg_type == MessageType.DISCONNECT.value:
                 if decrypted == b"Disconnect":
                     await self.send_message(MessageType.DISCONNECT, b"Disconnected", conn)
                     del self.conn_pool[sid]
                 elif decrypted == b"Disconnected":
                     del self.conn_pool[sid]
-                return
             elif msg_type == MessageType.PING.value:
                 await self.send_message(MessageType.PONG, b"Pong", conn)
-                return
             elif msg_type == MessageType.PONG.value:
-                return
+                pass  # 心跳响应，无需处理
             elif msg_type == MessageType.MESSAGE.value:
                 for cb in self.callbacks:
                     asyncio.create_task(cb(conn, decrypted))
             else:
-                pass
+                pass  # 未知消息类型
+                
         except Exception:
             pass
 
@@ -130,6 +153,8 @@ class npTLSServer:
         while True:
             to_remove = []
             for sid, conn in self.conn_pool.copy().items():
+                if not self.is_connected(conn):
+                    continue
                 if time.time() - conn.last_active > self.heartbeat_int:
                     await self.send_message(MessageType.PING, b"Ping", conn)
                 if time.time() - conn.last_active > self.heartbeat_int * 2:
@@ -153,15 +178,15 @@ class npTLSServer:
         await asyncio.gather(self.cli.run(), self._check_heartbeat())
 
 class npTLSClient:
-    def __init__(self, notepaper: Notepaper, index_page: str, heartbeat_interval: int = 5):
+    def __init__(self, notepaper: Notepaper, index_page: str, heartbeat_interval: int = 30):
         self.cli = notepaper
         self.priv_key, self.pub_key = generate_key_pair()
         self.ecdh = None
         self.sid = None
         self.msg_page = None
         self.server_key = None
-        self.send_seq = 0
-        self.peer_recv_seq = 0
+        self.send_seq = 0  # 初始发送序列号为0
+        self.peer_recv_seq = 0  # 期望接收的下一个序列号
         self.index_page = index_page
         self.conn_event = asyncio.Event()
         self.callbacks = []
@@ -178,7 +203,7 @@ class npTLSClient:
         if not all([self.ecdh, self.sid, self.msg_page]):
             raise RuntimeError("Handshake incomplete")
             
-        self.send_seq += 1
+        seq = self.send_seq
         nonce, encrypted, tag = self.ecdh.encrypt(data)
         msg = pack_message(
             msg_type=type_.value,
@@ -186,47 +211,46 @@ class npTLSClient:
             data=encrypted,
             tag=tag,
             sid=self.sid,
-            seq=self.send_seq
+            seq=seq
         )
         await self.cli.broadcast(self.msg_page, msg)
-
+        self.send_seq = (self.send_seq + 1) & MAX_SEQ  # 处理序列号回绕
+        
     async def _handle_msg(self, data):
         try:
             msg_type, seq, sid, nonce, encrypted, tag = unpack_message(data["text"])
             if sid != self.sid:
                 return
                 
-            if msg_type == MessageType.CONNECT.value:
-                if seq != 0:
-                    return
-                decrypted = self.ecdh.decrypt(nonce, encrypted, tag)
-                self.last_active = time.time()
-                if decrypted == b"Connected":
-                    self.conn_event.set()
+            # 验证序列号是否为期望的下一个序列号
+            if seq != self.peer_recv_seq:
+                # print(f"server: expected {self.peer_recv_seq}, got {seq}")
                 return
                 
-            if seq != self.peer_recv_seq + 1:
-                return
-                
+            # 序列号验证通过，递增期望接收的序列号
+            self.peer_recv_seq = (self.peer_recv_seq + 1) & MAX_SEQ
+            
+            # 解密消息
             decrypted = self.ecdh.decrypt(nonce, encrypted, tag)
-            self.peer_recv_seq = seq
             self.last_active = time.time()
             
-            if msg_type == MessageType.DISCONNECT.value:
+            # 处理各种消息类型
+            if msg_type == MessageType.CONNECT.value:
+                if decrypted == b"Connected":
+                    self.conn_event.set()
+            elif msg_type == MessageType.DISCONNECT.value:
                 if decrypted == b"Disconnect":
                     await self.send_message(MessageType.DISCONNECT, b"Disconnected")
                 await self._cleanup()
-                return
             elif msg_type == MessageType.PING.value:
                 await self.send_message(MessageType.PONG, b"Pong")
-                return
             elif msg_type == MessageType.PONG.value:
-                return
+                pass  # 心跳响应，无需处理
             elif msg_type == MessageType.MESSAGE.value:
                 for cb in self.callbacks:
                     asyncio.create_task(cb(decrypted))
             else:
-                pass
+                pass  # 未知消息类型
         except Exception:
             pass
 
@@ -269,14 +293,18 @@ class npTLSClient:
         self.ecdh = ECDH(self.priv_key, self.server_key)
         self.sid = secrets.token_urlsafe(6)
         
-        await self.cli.broadcast(self.msg_page, pack_message(
+        # 手动打包初始CONNECT消息（未加密）
+        msg = pack_message(
             msg_type=MessageType.CONNECT.value,
-            nonce=bytes(16),
-            data=self.pub_key.export_key(format="PEM").encode(),
-            tag=bytes(16),
+            nonce=bytes(16),  # 空nonce
+            data=self.pub_key.export_key(format="PEM").encode(),  # 未加密的公钥
+            tag=bytes(16),  # 空tag
             sid=self.sid,
-            seq=0))
-            
+            seq=0  # 初始序列号为0
+        )
+        await self.cli.broadcast(self.msg_page, msg)
+        self.send_seq = 1  # 发送后递增序列号
+        
         await self.cli.listen(self.msg_page, self._handle_msg)
         self.heartbeat_task = asyncio.create_task(self._run_heartbeat())
         await self.cli.run()
